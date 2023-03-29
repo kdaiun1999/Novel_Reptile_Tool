@@ -2,7 +2,11 @@ import time
 import requests
 from lxml import etree
 import os
+import demoLogger
 
+
+# 定义日志容器
+logPrinter = demoLogger.DemoLogger().logger
 
 # 控制参数：
 # Headers:伪装浏览器发送请求，降低被监控到的概率
@@ -40,13 +44,13 @@ def open_cmd():
 def judge_folder_if_exist(file_path, folder_path):
     if file_path:
         if not os.path.exists(file_path + "/" + folder_path):
-            print("********** Ⅰ 文件夹不存在，申请自动创建路径 **********")
+            logPrinter.info("********** Ⅰ 文件夹不存在，申请自动创建路径 **********")
             os.makedirs(file_path + "/" + folder_path)
             os.makedirs(file_path + "/" + folder_path + '/dir')
             os.makedirs(file_path + "/" + folder_path + '/novel')
-            print("********** 创建路径完成 **********\n")
+            logPrinter.info("********** 创建路径完成 **********\n")
         else:
-            print("********** Ⅰ 文件夹已存在，无需创建 **********\n")
+            logPrinter.info("********** Ⅰ 文件夹已存在，无需创建 **********\n")
     else:
         global FilePath
         FilePath = os.getcwd()
@@ -56,12 +60,12 @@ def judge_folder_if_exist(file_path, folder_path):
 # 2、读取一级目录界面，将目录数据和小说每一章节URL保存在dir文件夹下
 def get_dir(url):
     # 请求获取目录
-    print("********** Ⅱ 正在请求生成 目录.txt 和 URL.txt 文件...... **********")
+    logPrinter.info("********** Ⅱ 正在请求生成 目录.txt 和 URL.txt 文件...... **********")
     response = requests.get(url, headers=Headers)
     response.encoding = 'utf-8'
     selector = etree.HTML(response.text)
     srcTitles = selector.xpath('//*[@id="list"]/dl/dd/a/text()')
-    print(os.getcwd())
+    logPrinter.info(os.getcwd())
     os.chdir(FilePath + "/" + FolderPath + '/dir')
     # 生成目录文件
     for title in srcTitles:
@@ -79,9 +83,9 @@ def get_dir(url):
     with open("URL.txt", "w", encoding="utf-8") as f:
         for i in range(len(urls)):
             f.write(urls[i] + '\n')
-    print("目录信息：", desTitles)
-    print("URL信息：", urls)
-    print("********** 目录和URL生成完毕 **********\n")
+    logPrinter.info("目录信息：%a", desTitles)
+    logPrinter.info("URL信息：%a", urls)
+    logPrinter.info("********** 目录和URL生成完毕 **********\n")
 
 
 def if_txt_not_null(txt):
@@ -91,16 +95,16 @@ def if_txt_not_null(txt):
 # 从ip池中申请ip
 def get_proxy():
     data = requests.get("http://127.0.0.1:5010/get/").json()
-    print("成功获取代理地址: ", data.get("proxy"))
+    logPrinter.info("成功获取代理地址: %a", data.get("proxy"))
     return data
 # 删除掉不可以使用的ip
 def delete_proxy(proxy):
-    print("错误！正在删除错误代理地址: ", proxy)
+    logPrinter.info("错误！正在删除错误代理地址: %s", proxy)
     requests.get("http://127.0.0.1:5010/delete/?proxy={}".format(proxy))
 
 # 3、读取小说界面，保存数据到novel文件夹下
 def get_novel():
-    print("********** Ⅲ 正在请求下载小说 **********")
+    logPrinter.info("********** Ⅲ 正在请求下载小说 **********")
     os.chdir(FilePath + '/' + FolderPath + '/novel')
     i = 0
     while i < len(urls):
@@ -114,13 +118,13 @@ def get_novel():
             response = requests.get(urls[i], headers=Headers, proxies={"http": "http://{}".format(proxy)},
                                     timeout=timeout)
             response.encoding = 'utf-8'
-            # print("url = ", urls[i])
-            # print(response)
+            # logPrinter.info("url = ", urls[i])
+            # logPrinter.info(response)
             selector = etree.HTML(response.text)
             contents = selector.xpath('//*[@id="content"]/p/text()')
-            # print(contents)
+            # logPrinter.info(contents)
             if not contents:
-                print(desTitles[i] + "的返回值为空，重新下载")
+                logPrinter.info(desTitles[i] + "的返回值为空，重新下载")
                 continue
             with open(desTitles[i] + ".txt", "w", encoding="utf-8") as f:
                 for j in range(len(contents)):
@@ -128,21 +132,21 @@ def get_novel():
                         continue
                     content = '    ' + contents[j].replace('\n', '').strip() + '\n'
                     f.write(content)
-            print(str(desTitles[i]) + "下载成功！\n")
+            logPrinter.info(str(desTitles[i]) + "下载成功！\n")
         except Exception as ex:
             # # 删除代理池中代理
             delete_proxy(proxy)
             i -= 1
-            print(str(desTitles[i]) + "下载失败！")
-            print("出现如下报错信息：", ex)
-    print("********** 下载完毕 **********\n")
+            logPrinter.info(str(desTitles[i]) + "下载失败！")
+            logPrinter.info("出现如下报错信息：%s", ex)
+    logPrinter.info("********** 下载完毕 **********\n")
     return 1
 
 
 # 4、合并结果
 def join():
-    print("********** Ⅳ 合并小说每一章节 **********")
-    print(os.getcwd())
+    logPrinter.info("********** Ⅳ 合并小说每一章节 **********")
+    logPrinter.info(os.getcwd())
     f = open(FilePath + '/' + FolderPath + "/dir/目录.txt", encoding='utf-8')
     line = f.readline()
     os.chdir(FilePath + '/' + FolderPath)
@@ -158,7 +162,7 @@ def join():
             fa.write('\n\n')
             line = f.readline()
     f.close()
-    print("********** 合并完成 **********")
+    logPrinter.info("********** 合并完成 **********")
 
 
 if __name__ == '__main__':
