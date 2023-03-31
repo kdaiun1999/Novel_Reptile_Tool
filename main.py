@@ -6,9 +6,6 @@ import os
 import demoLogger
 
 
-# 定义日志容器
-logPrinter = demoLogger.DemoLogger().logger
-
 # 控制参数：
 # Headers参数user_agent:伪装浏览器发送请求，降低被监控到的概率
 USER_AGENT_LIST = [
@@ -26,27 +23,29 @@ USER_AGENT_LIST = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
 ]
 # DirUrl:爬取的小说目录界面链接
-DirUrl = 'https://www.biquge365.net/newbook/45173/'
+DirUrl = 'https://www.ixuanshu.org/book/1037/'
 # DirRegex:小说目录的正则表达式
-DirRegexTitle = '/html/body/div[1]/div[4]/ul/li/a/text()'
+DirRegexTitle = '//*[@id="info"]/div[1]/ul/li/a/text()'
 # DirRegexUrl:获取小说Url的正则表达式
-DirRegexUrl = '/html/body/div[1]/div[4]/ul/li/a/@href'
+DirRegexUrl = '//*[@id="info"]/div[1]/ul/li/a/@href'
 # NovelUrl:爬取的小说具体内容前半部分链接
-NovelUrl = 'https://www.biquge365.net'
+NovelUrl = 'https://www.ixuanshu.org/book/1037/'
 # NovelRegex:小说的正则表达式
-NovelRegex = '// *[ @ id = "txt"] / text()'
-# NovelRegex = '//*[@id="txt"]/foncolor/text()'
-
-
+NovelRegex = '//*[@id="content1"]/text()'
+# LogLevel1:控制台输出日志；LogLevel1:日志文件保存的日志等级。日志级别——目前有INFO和DEBUG
+LogLevel1 = "DEBUG"
+LogLevel2 = "INFO"
 # 内容阶段机制：
 Start = 0
 End = 0
 # FilePath:可以指定我们保存的绝对路径地址
 FilePath = 'D:/Novel'
 # FolderPath:创建保存小说路径 例:FolderPath = 'novel'
-FolderPath = '临高启明'
+FolderPath = '穿越1630之崛起南美'
 # 是否需要完成合并 1为true，0为false
 whether_join = 1
+# 是否打开合并进度条 1为true，0为false
+whether_join_processing = 0
 # 超时删掉代理地址
 timeout = 5
 # 保存的目录名称
@@ -54,13 +53,14 @@ desTitles = []
 # 保存的每章节小说地址url
 urls = []
 
+# 定义日志容器
+logPrinter = demoLogger.DemoLogger(LogLevel1, LogLevel2).logger
+
 def get_Headers():
     Header = random.choice(USER_AGENT_LIST)
     Headers = {
         'user-agent': Header}
-    print("Headers = ", Header)
     return Headers
-
 
 
 # 预置条件
@@ -102,7 +102,6 @@ def get_dir(url, dirRegexTitle, dirRegexUrl):
     response.encoding = 'utf-8'
     selector = etree.HTML(response.text)
     srcTitles = selector.xpath(dirRegexTitle)
-    logPrinter.info(os.getcwd())
     os.chdir(FilePath + "/" + FolderPath + '/dir')
     # 生成目录文件
     for title in srcTitles:
@@ -121,8 +120,8 @@ def get_dir(url, dirRegexTitle, dirRegexUrl):
     with open("URL.txt", "w", encoding="utf-8") as f:
         for i in range(len(urls)):
             f.write(urls[i] + '\n')
-    logPrinter.info("目录信息：%a", desTitles)
-    logPrinter.info("URL信息：%a", urls)
+    print("目录信息：", desTitles)
+    print("URL信息：", urls)
     logPrinter.info("********** 目录和URL生成完毕 **********\n\n")
 
 
@@ -133,11 +132,11 @@ def if_txt_not_null(txt):
 # 从ip池中申请ip
 def get_proxy():
     data = requests.get("http://127.0.0.1:5010/get/").json()
-    logPrinter.info("成功获取代理地址: %a", data.get("proxy"))
+    logPrinter.debug("成功获取代理地址: %a", data.get("proxy"))
     return data
 # 删除掉不可以使用的ip
 def delete_proxy(proxy):
-    logPrinter.info("错误！正在删除错误代理地址: %s", proxy)
+    logPrinter.error("错误！正在删除错误代理地址: %s", proxy)
     requests.get("http://127.0.0.1:5010/delete/?proxy={}".format(proxy))
 
 # 3、读取小说界面，保存数据到novel文件夹下
@@ -149,56 +148,66 @@ def get_novel(novelRegex):
         if os.path.exists(desTitles[i] + ".txt") and if_txt_not_null(desTitles[i] + ".txt"):
             i += 1
             continue
-        time.sleep(0.3)
+        # time.sleep(0.3)
         proxy = get_proxy().get("proxy")
         try:
             # 使用代理访问=
             response = requests.get(urls[i], headers=get_Headers(), proxies={"http": "http://{}".format(proxy)},
                                     timeout=timeout)
             response.encoding = 'utf-8'
-            # logPrinter.info("url = ", urls[i])
-            # logPrinter.info(response)
             selector = etree.HTML(response.text)
             contents = selector.xpath(novelRegex)
-            # logPrinter.info(contents)
             if not contents:
                 logPrinter.info(desTitles[i] + "的返回值为空，重新下载")
-                time.sleep(3)
+                time.sleep(5)
                 continue
             with open(desTitles[i] + ".txt", "w", encoding="utf-8") as f:
                 for j in range(len(contents)):
-                    if j == 0:
-                        continue
+                    # if j == 0:
+                    #     continue
                     content = '    ' + contents[j].replace('\n', '').strip() + '\n'
                     f.write(content)
             temp = round(((i + 1) / len(urls) * 100), 2)
             process = str(temp) + '%'
-            logPrinter.info("当前下载进度: " + process)
+            logPrinter.debug("当前下载进度: " + process)
             logPrinter.info(str(desTitles[i]) + "下载成功！\n")
-
         except Exception as ex:
             # # 删除代理池中代理
             # delete_proxy(proxy)
             i -= 1
-            logPrinter.info(str(desTitles[i]) + "下载失败！")
-            logPrinter.info("出现如下报错信息：%s", ex)
+            logPrinter.error(str(desTitles[i]) + "下载失败！")
+            logPrinter.error("出现如下报错信息：%s", ex)
             print(ex.__traceback__.tb_frame.f_globals["__file__"])  # 发生异常所在的文件
             print(ex.__traceback__.tb_lineno)  # 发生异常所在的行数
     logPrinter.info("********** 下载完毕 **********\n\n")
     return 1
 
 
-# 4、合并结果
-def join():
-    logPrinter.info("********** Ⅳ 合并小说每一章节 **********")
-    logPrinter.info(os.getcwd())
+# 可以生成不同格式的结果文件
+def file_generation(file_format):
+    i = 0
     f = open(FilePath + '/' + FolderPath + "/dir/目录.txt", encoding='utf-8')
     line = f.readline()
     os.chdir(FilePath + '/' + FolderPath)
-    with open(FolderPath + ".txt", "w", encoding="utf-8") as fa:
+    with open(FolderPath + file_format, "w", encoding="utf-8") as fa:
         os.chdir(FilePath + '/' + FolderPath + '/novel')
         while line:
+            # 合并进度条
+            if whether_join_processing:
+                temp0 = round(((i + 1) / len(urls) * 100), 2)
+                process = str(temp0) + "%"
+                temp = int((i + 1) / len(urls) * 100)
+                msg = "|"
+                for j in range(temp):
+                    msg += '▇'
+                for j in range(100 - temp):
+                    msg += ' '
+                msg += "|"
+                print('\r' + "当前合并进度(" + file_format + "文档): " + msg + process, end='')
+                i += 1
+            # 写入文件
             f1 = open(line.replace('\n', '') + '.txt', encoding='utf-8')
+            fa.write(line)
             line1 = f1.readline()
             while line1:
                 fa.write(line1)
@@ -207,7 +216,15 @@ def join():
             fa.write('\n\n')
             line = f.readline()
     f.close()
-    logPrinter.info("********** 合并完成 **********\n\n\n\n\n\n")
+    if whether_join_processing:
+        print("")
+
+# 4、合并结果
+def join():
+    logPrinter.info("********** Ⅳ 合并小说每一章节 **********")
+    file_generation(".txt")
+    file_generation(".md")
+    logPrinter.info("********** 合并完成 **********\n\n\n\n")
 
 
 if __name__ == '__main__':
